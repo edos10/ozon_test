@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/denisenkom/go-mssqldb"
+	"github.com/edos10/ozon_test/handlers"
 )
 
 type URL struct {
