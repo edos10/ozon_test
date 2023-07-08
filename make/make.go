@@ -12,6 +12,8 @@ var downcase = 95
 
 const sizeUrl = 10
 
+
+
 /*
 	 Порядок следования всех символов в map:
 	a-z = 0-25
@@ -62,8 +64,21 @@ func makeMaps() {
 
 func NextUrlString(current string) string {
 	newUrl := []byte(current)
-	for i := sizeUrl - 1; i > -1; i-- {
-		//if newUrl[]
+	n := len(current)
+	k := n
+	i := sizeUrl - 1
+	for i >= 0 {
+		if int(newUrl[i]) < n - 1 {
+			break
+		}
+		i -= 1
+	}
+	if i == -1 {
+		return ""
+	}
+	newUrl[i] += 1
+	for j := i + 1; i < k; i++ {
+		newUrl[j] = 0
 	}
 	result := string(newUrl)
 	return result

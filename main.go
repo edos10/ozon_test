@@ -1,32 +1,136 @@
 package main
 
 import (
+	"context"
+	//"database/sql"
 	"fmt"
-	"github.com"
+	"io"
+	"flag"
+	"log"
+	"net/http"
+	"os"
+	"os/signal"
+	_ "github.com/lib/pq"
+	"github.com/edos10/ozon_test/handlers"
+	"github.com/gorilla/mux"
+
 )
 
-type URL struct {
-}
+const sizeUrl, sizeAlphabet = 10, 63
 
-const sizeUrl = 10
+var numToLetter = make(map[int]byte)
+var letterToNum = make(map[byte]int)
 
-func MakeMaps() map[int]string {
-	result := make(map[int]string)
-	c := rune(97)
-	fmt.Printf(string(c))
-	return result
-}
 
-func NextUrlString(current string) string {
-	newUrl := []byte(current)
-	for i := sizeUrl - 1; i > -1; i-- {
-		if newUrl[]
+const (
+	startSmallLts = 97
+	endSmallLts = 122
+	startBigLts = 65
+	endBigLts = 90
+	startNums = 48
+	downcase = 95
+	host     = "localhost"
+	port     = 5432
+	user     = "postgres"
+	password = "default"
+	dbname   = "guides_data"
+)
+
+/*
+         Порядок следования всех символов в map:
+	a-z = 0-25
+	A-Z = 26-51
+	0-9 = 52-61
+	_ = 62
+*/
+
+func makeMaps() {
+	startSym := byte('a')
+	for i := 0; i < 26; i++ {
+		numToLetter[i] = startSym
+		startSym++
 	}
-	result := string(newUrl)
-	return result
+	startSym = byte('A')
+	for i := 26; i < 52; i++ {
+		numToLetter[i] = startSym
+		startSym++
+	}
+	startSym = byte('0')
+	for i := 52; i < 62; i++ {
+		numToLetter[i] = startSym
+		startSym++
+	}
+	numToLetter[62] = '_'
+
+	startSym = byte('a')
+	numForMap := 0
+	for startSym <= 'z' {
+		letterToNum[startSym] = numForMap
+		startSym++
+		numForMap++
+	}
+	startSym = byte('A')
+	for startSym <= 'Z' {
+		letterToNum[startSym] = numForMap
+		startSym++
+		numForMap++
+	}
+	startSym = byte('0')
+	for startSym <= '9' {
+		letterToNum[startSym] = numForMap
+		startSym++
+		numForMap++
+	}
+	letterToNum['_'] = 62
+}
+
+type Database interface {
+	Save(shortUrl, originalUrl string) error
+	Get(shortUrl string) error
+	io.Closer
 }
 
 func main() {
-	c := "aaaaaaaaaa"
-	fmt.Println(NextUrlString(c))
+	typeStorage := flag.String("storage", "redis", "Storage type: redis or postgres")
+
+	flag.Parse()
+
+	var db Database
+	switch *typeStorage {
+
+	case "redis":
+		db = New
+	case "postgres":
+		_ = 6
+	default:
+		log.Fatal("Use postgres or redis, error...")
+
+	}
+	fmt.Println("Successfully connected!")
+	makeMaps()
+	r := mux.NewRouter()
+	r.HandleFunc("/shorten", ShortenURLHandler(db)).Methods("POST")
+	r.HandleFunc("/get", GetURLHandler(db)).Methods("GET")
+
+	server := &http.Server{
+		Addr:    ":8080",
+		Handler: r,
+	}
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	<-stop
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := db.Close(); err != nil {
+		log.Fatal(err)
+	}
+	if err := server.Shutdown(ctx); err != nil {
+		log.Fatal(err)
+	}
+	log.Println("Server gracefully stopped")
 }
